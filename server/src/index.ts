@@ -1,6 +1,7 @@
-import express from "express";      
+import express from "express";
 import cors from "cors";
 import authRouter from "./routes/auth.js";
+import roomsRouter from "./routes/rooms.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -12,8 +13,8 @@ app.get("/", (req, res) => {
   res.send("Chat server running");
 });
 
-// All routes in authRouter will be prefixed with /api/auth
 app.use("/api/auth", authRouter);
+app.use("/api/rooms", roomsRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
