@@ -1,8 +1,8 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import prisma from "../prisma.js";
-import { error } from "node:console";
 
 const router = Router();
 
@@ -11,25 +11,35 @@ const router = Router();
 router.post("/signup", async (req: Request, res: Response) => {
   const { username, email, password } = req.body;
 
-  // Check if user already exists
-  const existing = await prisma.user.findFirst({
-    where: { OR: [{ email }, { username }] },
-  });
-
-  if (existing) {
-    res.status(400).json({ error: "Username or email already taken" });
+  if (!username || !email || !password) {
+    res.status(400).json({ error: "All fields are required" });
     return;
   }
 
-  // hash the password
-  const hashed = await bcrypt.hash(password, 10);
+  try {
+    // Check if user already exists
+    const existing = await prisma.user.findFirst({
+      where: { OR: [{ email }, { username }] },
+    });
 
-  // create the user
-  const user = await prisma.user.create({
-    data: { username, email, password: hashed },
-  });
+    if (existing) {
+      res.status(400).json({ error: "Username or email already taken" });
+      return;
+    }
 
-  res.status(201).json({ message: "Account created!", userId: user.id });
+    // hash the password
+    const hashed = await bcrypt.hash(password, 10);
+
+    // create the user
+    const user = await prisma.user.create({
+      data: { username, email, password: hashed },
+    });
+
+    res.status(201).json({ message: "Account created!", userId: user.id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Something went wrong" });
+  }
 });
 
 // Login
@@ -37,25 +47,41 @@ router.post("/signup", async (req: Request, res: Response) => {
 router.post("/login", async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
-  // Find User
-  const user = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (!user) {
-    res.status(400).json({ error: "Invalid email or password" });
+  if (!email || !password) {
+    res.status(400).json({ error: "All fields are required" });
     return;
   }
 
-  // Check password
-  const valid = await bcrypt.compare(password, user.password);
+  try {
+    // Find User
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
 
-  if (!valid) {
-    res.status(400).json({ error: "Invalid email or password" });
-    return;
+    if (!user) {
+      res.status(400).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    // Check password
+    const valid = await bcrypt.compare(password, user.password);
+
+    if (!valid) {
+      res.status(400).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, username: user.username }, // payload
+      process.env.JWT_SECRET as string, // secret
+      { expiresIn: "7d" },
+    );
+
+    res.status(200).json({ token, userId: user.id, username: user.username });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Something went wrong" });
   }
-
-  res.status(200).json({ message: "Logged in", userId: user.id });
 });
 
 export default router;
